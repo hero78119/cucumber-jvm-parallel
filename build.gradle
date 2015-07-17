@@ -1,0 +1,102 @@
+apply plugin: 'groovy'
+apply plugin: 'maven'
+apply plugin: 'application'
+
+configurations {
+    resultArchives
+}
+
+ext.seleniumVersion = '2.41.0'
+
+dependencies {
+
+
+    compile 'info.cukes:gherkin:2.12.2'
+    compile 'info.cukes:cucumber-core:1.2.2'
+    compile 'info.cukes:cucumber-groovy:1.2.2'
+//    compile group: 'org.seleniumhq.selenium', name: 'selenium-chrome-driver', version: seleniumVersion
+    compile group: 'org.seleniumhq.selenium', name: 'selenium-api', version: seleniumVersion
+    compile group: 'org.seleniumhq.selenium', name: 'selenium-java', version: seleniumVersion
+
+    groovy localGroovy()
+}
+
+repositories {
+    mavenCentral()
+}
+
+group = 'com.yahoo.jonaswu'
+version = '1.0'
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            repository(url: uri('./jar_repo'))
+        }
+    }
+}
+
+artifacts {
+    resultArchives file: file('build/libs/cucumberParallel-1.0.jar')
+}
+
+jar {
+    //from files(sourceSets.main.output.classesDir)
+    //from configurations.runtime.asFileTree.files.collect { zipTree(it) }
+
+    //doFirst {
+    //    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    //}
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+    manifest {
+        attributes 'Main-Class': 'Main'
+    }
+}
+
+task uberjar(type: Jar, dependsOn: [':compileJava', ':compileGroovy']) {
+
+    //from files(sourceSets.main.output.classesDir)
+    //from configurations.runtime.asFileTree.files.collect { zipTree(it) }
+
+    //doFirst {
+    //    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    //}
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+
+
+    manifest {
+        attributes 'Main-Class': 'Main'
+    }
+}
+
+task go(type: JavaExec, dependsOn: [':compileJava', ':compileGroovy']) {
+    systemProperties 'file.encoding': 'UTF-8'
+    classpath = sourceSets.main.runtimeClasspath
+    standardInput = System.in
+    def reportDir = new File('/home/y/var/arya/results/')
+    if (!reportDir.isDirectory())
+        reportDir = ''
+    else
+        reportDir = '/home/y/var/arya/results/'
+    main = 'com.yahoo.jonaswu.cucumberparallel.Main'
+    args = []
+    args += ['-f', "json:${reportDir}cucumber.json", '-f', "junit:${reportDir}result.xml", '--glue', 'src/test/groovy', '--glue', '../hkdev_qebase/src/main/groovy/globalhook', 'src/test/resources', '--max_instance', '2']
+    if (project.hasProperty('tags')) {
+        if (tags) {
+            ext.tagsSet = tags.split('#')
+            ext.tagsSet.each() { args += ['--tags', "${it}"] }
+        }
+    }
+
+}
+
+test {
+    //makes the standard streams (err and out) visible at console when running tests
+    testLogging.showStandardStreams = true
+}
+
+test {
+    onOutput { descriptor, event ->
+        logger.lifecycle("Test: " + descriptor + " produced standard out/err: " + event.message)
+    }
+}
